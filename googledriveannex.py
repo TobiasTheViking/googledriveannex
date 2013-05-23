@@ -226,23 +226,8 @@ def main():
 
     common.log("Conf: " + repr(conf), 2)
 
-    changed = False
-    if False and "credentials" not in conf:
-        #conf["uname"] = raw_input("Please enter your flickr email address: ")
-        #common.log("e-mail set to: " + conf["uname"])
-        conf["credentials"] = login()
-        changed = True
-
-    if "encrypted" not in conf:
-        conf["encrypted"] = "?"
-        while (conf["encrypted"].lower().find("y") == -1 and conf["encrypted"].lower().find("n") == -1 ):
-            conf["encrypted"] = raw_input("Should uploaded files be encryptes [yes/no]: ")
-        conf["encrypted"] = conf["encrypted"].lower().find("y") > -1
-        common.log("encryption set to: " + repr(conf["encrypted"]))
-        changed = True
-
     login()
-    
+
     folder = findInFolder(conf["folder"], False)
     if folder:
         common.log("Using folder: " + repr(folder["id"]))
@@ -282,24 +267,14 @@ def main():
         getFile(ANNEX_KEY, ANNEX_FILE, ANNEX_FOLDER)
     elif "remove" == ANNEX_ACTION:
         deleteFile(ANNEX_KEY, ANNEX_FOLDER)
-    elif changed:
-        common.log("Program sucessfully setup")
-        if conf["encrypted"]:
-            encryption = "shared"
-        else:
-            encryption = "none"
-
+    else:
         setup = '''Please run the following command in your annex directory
 git config annex.googledrive-hook '/usr/bin/python2 %s/googledriveannex.py'
 git annex initremote googledrive type=hook hooktype=googledrive encryption=%s
 git annex describe googledrive "the googledrive library"
-''' % (os.getcwd(), encryption)
+''' % (os.getcwd(), "shared")
         print setup
-        common.log("Saving googledriveannex.conf", 0)
         saveFile(pwd + "/googledriveannex.conf", json.dumps(conf))
-    else:
-        print("ERROR")
-        sys.exit(1)
 
 t = time.time()
 common.log("START")
