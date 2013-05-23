@@ -94,19 +94,19 @@ def findInFolder(subject, folder):
                 param["q"] += " and '%s' in parents" % folder["id"]
             if page_token:
                 param['pageToken'] = page_token
-            common.log("Calling with: " + repr(param))
+            common.log("Calling with: " + repr(param), 1)
             files = service.files().list(**param).execute()
 
             result.extend(files['items'])
             page_token = files.get('nextPageToken')
             if not page_token:
-                common.log("Breaking with: " + repr(result) + " - " + repr(files))
+                common.log("Breaking with: " + repr(result) + " - " + repr(files), 1)
                 break
         except errors.HttpError, error:
             common.log('An error occurred: %s' % error)
             break
 
-    common.log("Results: " + str(len(result)))
+    common.log("Results: " + str(len(result)), 1)
     for res in result:
         if res["mimeType"] == "application/vnd.google-apps.folder" and res["title"] == subject:
                 common.log("Found %s with id %s" %( subject, repr(res["id"])))
@@ -116,9 +116,7 @@ def findInFolder(subject, folder):
             if res["originalFilename"] == subject:
                 common.log("Found %s with id %s" %( subject, repr(res["id"])))
                 return res
-
-        
-    common.log("Failure")
+    common.log("Failure on: " + subject)
 
 def checkFile(subject, folder):
     common.log(subject)
@@ -258,7 +256,6 @@ def main():
         common.log("root folder: " + repr(root_folder["id"]))
         ANNEX_FOLDER = root_folder
 
-    #ANNEX_FOLDER = "%s-%s-%s" % ("annex", ANNEX_HASH_1, ANNEX_HASH_2)
     if "store" == ANNEX_ACTION:
         postFile(ANNEX_KEY, ANNEX_FILE, ANNEX_FOLDER)
     elif "checkpresent" == ANNEX_ACTION:
