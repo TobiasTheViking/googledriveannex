@@ -30,8 +30,6 @@ import httplib2
 client_id = "617824357867.apps.googleusercontent.com"
 client_secret = "vYxht56r40BlwpEagH_oPJPP"
 redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
-#auth_uri = "https://accounts.google.com/o/oauth2/auth",
-#token_uri = "https://accounts.google.com/o/oauth2/token"
 oauth_scope = 'https://www.googleapis.com/auth/drive'
 http = httplib2.Http()
 
@@ -45,7 +43,7 @@ def login():
     else:
         flow = OAuth2WebServerFlow(client_id, client_secret, oauth_scope, redirect_uri)
         authorize_url = flow.step1_get_authorize_url()
-        common.log('Go to the following link in your browser: ' + authorize_url)
+        print 'Go to the following link in your browser: ' + authorize_url
         code = raw_input('Enter verification code: ').strip()
         credentials = flow.step2_exchange(code)
 
@@ -105,7 +103,7 @@ def findInFolder(subject, folder):
                 common.log("Breaking with: " + repr(result) + " - " + repr(files))
                 break
         except errors.HttpError, error:
-            print 'An error occurred: %s' % error
+            common.log('An error occurred: %s' % error)
             break
 
     common.log("Results: " + str(len(result)))
@@ -146,13 +144,13 @@ def getFile(subject, filename, folder):
         if download_url:
             resp, content = service._http.request(download_url)
             if resp.status == 200:
-                print 'Status: %s' % resp
+                common.log('Status: %s' % resp)
                 f = open(filename, "wb")
                 f.write(content)
                 f.close()
                 common.log("Done")
             else:
-                print 'An error occurred: %s' % resp
+                common.log('An error occurred: %s' % resp)
         else:
             common.log("The file doesn't have any content stored on Drive.")
     else:
@@ -285,22 +283,20 @@ def main():
     elif "remove" == ANNEX_ACTION:
         deleteFile(ANNEX_KEY, ANNEX_FOLDER)
     elif changed:
-        if True: #user_id:
-            print("Program sucessfully setup")
-            if conf["encrypted"]:
-                encryption = "shared"
-            else:
-                encryption = "none"
-            setup = '''Please run the following command in your annex directory
+        common.log("Program sucessfully setup")
+        if conf["encrypted"]:
+            encryption = "shared"
+        else:
+            encryption = "none"
+
+        setup = '''Please run the following command in your annex directory
 git config annex.googledrive-hook '/usr/bin/python2 %s/googledriveannex.py'
 git annex initremote googledrive type=hook hooktype=googledrive encryption=%s
 git annex describe googledrive "the googledrive library"
-''' % (pwd, encryption)
-            print setup
-            common.log("Saving googledriveannex.conf", 0)
-            saveFile(pwd + "/googledriveannex.conf", json.dumps(conf))
-        else:
-            print("Error during setup. Please try again")
+''' % (os.getcwd(), encryption)
+        print setup
+        common.log("Saving googledriveannex.conf", 0)
+        saveFile(pwd + "/googledriveannex.conf", json.dumps(conf))
     else:
         print("ERROR")
         sys.exit(1)
