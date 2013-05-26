@@ -6,7 +6,8 @@ import time
 import inspect
 
 conf = False
-plugin = "googledriveannex"
+version = "0.1.0"
+plugin = "googledriveannex-" + version
 
 pwd = os.path.dirname(__file__)
 if not pwd:
