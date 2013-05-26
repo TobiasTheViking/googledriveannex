@@ -32,6 +32,7 @@ client_secret = "vYxht56r40BlwpEagH_oPJPP"
 redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
 oauth_scope = 'https://www.googleapis.com/auth/drive'
 http = httplib2.Http()
+service = False
 
 def login():
     common.log("")
@@ -85,6 +86,7 @@ def findInFolder(subject, folder):
 
     result = []
     page_token = None
+    errors = 0
     while True:
         try:
             param = {'q': "title = '%s'" % subject, "fields": "items"}
@@ -103,20 +105,26 @@ def findInFolder(subject, folder):
                 common.log("Breaking with: " + repr(result) + " - " + repr(files), 1)
                 break
         except errors.HttpError, error:
-            common.log('An error occurred: %s' % error)
-            break
+            common.log('An error occurred(%s): %s' % (errors, error))
+            errors += 1
+            if errors < 4:
+                time.sleep(errors)
+            else:
+                print("Fatal error: " + repr(error))
+                sys.exit(1)
 
     common.log("Results: " + str(len(result)), 1)
     for res in result:
         if res["mimeType"] == "application/vnd.google-apps.folder" and res["title"] == subject:
-                common.log("Found %s with id %s" %( subject, repr(res["id"])))
+                common.log("Found folder %s with id %s" %( subject, repr(res["id"])))
                 return res
 
         if "originalFilename" in res:
             if res["originalFilename"] == subject:
-                common.log("Found %s with id %s" %( subject, repr(res["id"])))
+                common.log("Found file %s with id %s" %( subject, repr(res["id"])))
                 return res
     common.log("Failure on: " + subject)
+    return False
 
 def checkFile(subject, folder):
     common.log(subject)
@@ -231,6 +239,7 @@ def main():
         common.log("Using folder: " + repr(folder["id"]))
         ANNEX_FOLDER = folder
     else:
+
         common.log("Creating primary folder")
         root_folder = service.files().insert(body={ 'title': conf["folder"], 'mimeType': "application/vnd.google-apps.folder" }).execute()
         common.log("root folder: " + repr(root_folder["id"]))
