@@ -271,7 +271,9 @@ def main():
     elif "remove" == ANNEX_ACTION:
         deleteFile(ANNEX_KEY, ANNEX_FOLDER)
     else:
-        setup = '''Please run the following command in your annex directory
+        setup = '''
+Please run the following commands in your annex directory:
+
 git config annex.googledrive-hook '/usr/bin/python2 %s/googledriveannex.py'
 git annex initremote googledrive type=hook hooktype=googledrive encryption=%s
 git annex describe googledrive "the googledrive library"
