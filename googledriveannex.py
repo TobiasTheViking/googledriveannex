@@ -6,7 +6,7 @@ import time
 import inspect
 
 conf = False
-version = "0.1.0"
+version = "0.1.1"
 plugin = "googledriveannex-" + version
 
 pwd = os.path.dirname(__file__)
@@ -58,14 +58,10 @@ def login():
     service = build('drive', 'v2', http=http)
 
 def postFile(subject, filename, folder):
-    common.log("%s to %s - %s" % ( filename, folder["id"], subject))
-
-
-    # Create an httplib2.Http object and authorize it with our credentials
+    common.log("%s to %s - %s" % ( repr(filename), folder["id"], subject))
 
     drive_service = build('drive', 'v2', http=http)
 
-    # Insert a file
     media_body = MediaFileUpload(filename, mimetype='text/plain', resumable=True)
     body = {
         'title': subject,
