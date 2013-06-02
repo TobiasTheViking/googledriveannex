@@ -6,7 +6,7 @@ import time
 import inspect
 
 conf = False
-version = "0.1.1"
+version = "0.1.2"
 plugin = "googledriveannex-" + version
 
 pwd = os.path.dirname(__file__)
@@ -120,7 +120,7 @@ def findInFolder(subject, folder):
             if res["originalFilename"] == subject:
                 common.log("Found file %s with id %s" %( subject, repr(res["id"])))
                 return res
-    common.log("Failure on: " + subject)
+    common.log("Failure on: " + repr(subject))
     return False
 
 def checkFile(subject, folder):

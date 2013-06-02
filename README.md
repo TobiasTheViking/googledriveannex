@@ -6,6 +6,7 @@ Hook program for gitannex to use Google Drive as backend
 # Requirements:
 
     python2
+    python-httplib2
 
 Credit for the googledrive api interface goes to google
 
