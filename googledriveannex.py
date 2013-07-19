@@ -3,7 +3,6 @@ import os
 import sys
 import json
 import time
-import inspect
 
 conf = False
 version = "0.1.2"
@@ -24,8 +23,6 @@ from apiclient.discovery import build
 from apiclient.http import MediaFileUpload
 from oauth2client.client import OAuth2WebServerFlow
 from oauth2client.file import Storage
-from apiclient import errors
-from apiclient.discovery import build
 import httplib2
 
 client_id = "617824357867.apps.googleusercontent.com"
