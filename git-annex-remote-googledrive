@@ -1,0 +1,383 @@
+#!/usr/bin/env python2
+import os
+import sys
+import json
+import time
+import inspect
+import webbrowser
+
+try:
+    dbglevel = int(os.getenv("DBGLEVEL") or 0)
+except:
+    dbglevel = 0
+
+conf = {}
+version = "0.2.0"
+plugin = "googledriveannex-" + version
+
+pwd = os.path.realpath(__file__)
+pwd = pwd[:pwd.rfind("/")]
+if dbglevel:
+    sys.stderr.write("Path: " + repr(pwd) + "\n")
+
+sys.path.append(pwd + '/lib')
+
+import CommonFunctions as common
+
+from apiclient.discovery import build
+from apiclient.http import MediaFileUpload
+import oauth2client.client
+from oauth2client.client import OAuth2WebServerFlow
+from oauth2client.file import Storage
+from oauth2client.file import Credentials
+from apiclient import errors
+from apiclient.discovery import build
+import httplib2
+
+client_id = "617824357867.apps.googleusercontent.com"
+client_secret = "vYxht56r40BlwpEagH_oPJPP"
+redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
+oauth_scope = 'https://www.googleapis.com/auth/drive'
+http = httplib2.Http()
+service = False
+credentials = False
+
+def login(cred={}):
+    common.log("")
+    global service, credentials, http
+    if isinstance(cred, unicode) or isinstance(cred, str):
+        credentials = Credentials.new_from_json(cred)
+    else:
+        flow = OAuth2WebServerFlow(client_id, client_secret, oauth_scope, redirect_uri)
+        authorize_url = flow.step1_get_authorize_url()
+        if "oauth" not in cred or len(cred["oauth"]) == 0:
+            common.log('Go to the following link in your browser: ' + authorize_url, 0)
+            webbrowser.open(authorize_url, True, True)
+            return False
+        else:
+            credentials = flow.step2_exchange(cred["oauth"])
+
+        common.log("Saving credentials")
+        cred = credentials.to_json()
+
+    http = credentials.authorize(http)
+    common.log("Done: " + repr(http) + " - " + repr(credentials) + " - " + repr(cred))
+    service = build('drive', 'v2', http=http)
+    common.log("Done: " + repr(service) + " - " + repr(cred))
+    return cred
+
+def postFile(subject, filename, folder):
+    common.log("%s to %s - %s" % ( repr(filename), folder["id"], subject))
+
+    filesize = os.path.getsize(filename)
+    drive_service = build('drive', 'v2', http=http)
+
+    # Smallest chunksize allowed by api
+    chunksize = (256*1024)
+
+    media_body = MediaFileUpload(filename, mimetype='text/plain', chunksize=chunksize, resumable=True)
+    body = {
+        'title': subject,
+        'mimeType': 'text/plain',
+        "parents":[folder]
+        }
+
+    if not conf["encrypted"]:
+        common.log("Unencrypted repository, so adding filename to description")
+        body['description'] = filename[filename.rfind(os.path.sep) + 1:]
+
+    def injectexecute(http=None):
+        """Execute the request.  
+        
+        Args:   
+        http: httplib2.Http, an http object to be used in place of the        
+        one the HttpRequest request object was constructed with.        
+        
+        Returns:
+        A deserialized object model of the response body as determined        
+        by the postproc.        
+        
+        Raises: 
+        apiclient.errors.HttpError if the response was not a 2xx.    
+        httplib2.HttpLib2Error if a transport error has occured.
+        """
+        if http is None:
+            http = gdrequest.http
+        if gdrequest.resumable:
+            body = None
+            while body is None:
+                try:
+                    status, body = gdrequest.next_chunk(http=http)
+                except Exception as e:
+                    common.log("Exception at gdrequest.next_chunk: " + repr(e))
+                    return False
+
+                common.log("status: " + repr(status), 2)
+                if status:
+                    common.log("status.progress: " + repr(status.progress()), 3)
+                    common.progress(filesize, int(filesize * status.progress()))
+            return body
+        else:
+            if 'content-length' not in gdrequest.headers:
+                gdrequest.headers['content-length'] = str(gdrequest.body_size)
+            # If the request URI is too long then turn it into a POST request.
+            if len(gdrequest.uri) > MAX_URI_LENGTH and gdrequest.method == 'GET':
+                gdrequest.method = 'POST'
+                gdrequest.headers['x-http-method-override'] = 'GET'
+                gdrequest.headers['content-type'] = 'application/x-www-form-urlencoded'
+                parsed = urlparse.urlparse(gdrequest.uri)
+                gdrequest.uri = urlparse.urlunparse(
+                    (parsed.scheme, parsed.netloc, parsed.path, parsed.params, None,
+                     None)
+                    )
+                gdrequest.body = parsed.query
+                gdrequest.headers['content-length'] = str(len(gdrequest.body))
+
+            resp, content = http.request(str(gdrequest.uri), method=str(gdrequest.method),
+         body=gdrequest.body, headers=gdrequest.headers)
+            for callback in gdrequest.response_callbacks:
+                callback(resp)
+            if resp.status >= 300:
+                raise HttpError(resp, content, uri=gdrequest.uri)
+        return gdrequest.postproc(resp, content)
+
+    gdrequest = drive_service.files().insert(body=body, media_body=media_body)
+
+    org_execute = gdrequest.execute
+    gdrequest.execute = injectexecute
+
+    file = gdrequest.execute()  
+    gdrequest.execute = org_execute
+
+    if file:
+        common.log("Done: " + repr(file["id"]))
+        return True
+    else:
+        common.log("Failure: " + repr(file))
+        return False
+
+def findInFolder(subject, folder):
+    common.log("%s - %s" % (repr(subject), repr(folder)), 3)
+
+    result = []
+    page_token = None
+    errors = 0
+    while True:
+        try:
+            param = {'q': "title = '%s'" % subject, "fields": "items"}
+            #param = {'q': "title = '%s'" % subject}
+            #param = {"fields": "items"}
+            if folder:
+                param["q"] += " and '%s' in parents" % folder["id"]
+            if page_token:
+                param['pageToken'] = page_token
+            common.log("Calling with: " + repr(param), 1)
+            files = service.files().list(**param).execute()
+
+            result.extend(files['items'])
+            page_token = files.get('nextPageToken')
+            if not page_token:
+                common.log("Breaking with: " + repr(result) + " - " + repr(files), 1)
+                break
+        except Exception as e:
+            common.log('An error occurred(%s): %s' % (errors, repr(e)))
+        #except errors.HttpError, error:
+            #common.log('An error occurred(%s): %s' % (errors, error))
+            errors += 1
+            if errors < 4:
+                time.sleep(errors)
+                return False
+            else:
+                common.log("Fatal error: " + repr(error))
+                return True
+                sys.exit(1)
+
+    common.log("Results: " + str(len(result)), 1)
+    for res in result:
+        if res["mimeType"] == "application/vnd.google-apps.folder" and res["title"] == subject:
+                common.log("Found folder %s with id %s" %( subject, repr(res["id"])))
+                return res
+
+        if "originalFilename" in res:
+            if res["originalFilename"] == subject:
+                common.log("Found file %s with id %s" %( subject, repr(res["id"])))
+                return res
+    common.log("Failure on: " + repr(subject))
+    return False
+
+def checkFile(subject, folder):
+    common.log(subject)
+    global m
+
+    file = findInFolder(subject, folder)
+    if file:
+        common.log("Found: " + repr(file))
+        return True
+    else:
+        common.log("Failure")
+        return False
+
+def getFile(subject, filename, folder):
+    common.log(subject)
+    global m
+
+    file = findInFolder(subject, folder)
+    if file:
+        common.log("Got file")
+        download_url = file.get('downloadUrl')
+        common.log("Got download_url: " + repr(download_url))
+        if download_url:
+            ret = common.fetchPage({"link": download_url, "headers": [("Authorization", "Bearer " + credentials.access_token)], "progress": "true"})
+
+            if ret["status"] == 200:
+                common.log('Status: %s' % ret["status"])
+                f = open(filename, "wb")
+                f.write(ret["content"])
+                f.close()
+                common.log("Done")
+                return True
+            else:
+                common.log('An error occurred: %s' % resp)
+        else:
+            common.log("The file doesn't have any content stored on Drive.")
+    else:
+        common.log("Failure")
+
+    return False
+
+def deleteFile(subject, folder):
+    common.log(subject)
+
+    global m
+
+    file = findInFolder(subject, folder)
+
+    if file:
+        res = service.files().delete(fileId=file["id"]).execute()
+        common.log("Done: " + repr(res))
+        return True
+    else:
+        common.log("Failure")
+        return False
+
+def setFolder(base, keys):
+    common.log(repr(base) + " - " + repr(keys))
+    keys = keys.replace("VALUE ", "").split("/")
+
+    folder = findInFolder(base, False)
+    if folder:
+        common.log("Using folder: " + repr(folder))
+        ANNEX_FOLDER = folder
+    else:
+        root_folder = service.files().insert(body={ 'title': base, 'mimeType': "application/vnd.google-apps.folder" }).execute()
+        common.log("root folder: " + repr(root_folder["id"]))
+        ANNEX_FOLDER = root_folder
+
+    folder = findInFolder(keys[0], ANNEX_FOLDER)
+    if folder:
+        common.log("Using folder1: " + repr(folder["id"]))
+        ANNEX_FOLDER = folder
+    else:
+        common.log("Creating secondary folder")
+        root_folder = service.files().insert(body={ 'title': keys[0], 'mimeType': "application/vnd.google-apps.folder", "parents": [ANNEX_FOLDER]}).execute()
+        common.log("root folder: " + repr(root_folder["id"]))
+        ANNEX_FOLDER = root_folder
+
+    folder = findInFolder(keys[1], ANNEX_FOLDER)
+    if folder:
+        common.log("Using folder2: " + repr(folder["id"]))
+        ANNEX_FOLDER = folder
+    else:
+        common.log("Creating tertiary folder")
+        root_folder = service.files().insert(body={ 'title': keys[1], 'mimeType': "application/vnd.google-apps.folder", "parents": [ANNEX_FOLDER]}).execute()
+        common.log("root folder: " + repr(root_folder["id"]))
+        ANNEX_FOLDER = root_folder
+
+    return ANNEX_FOLDER
+
+## gaprot interface
+
+def initremote(line):
+    common.log("")
+    oauth = os.getenv("OAUTH") or ""
+    encryption = common.getConfig("encryption")
+    myfolder = common.getConfig("folder")
+    stored_creds = sys.modules["__main__"].login({"oauth": oauth})
+    if len(myfolder) and stored_creds:
+        common.sprint('SETCONFIG myfolder ' + myfolder + '')
+        common.sprint('SETCONFIG stored_creds ' + json.dumps(stored_creds) + '')
+        common.sprint('INITREMOTE-SUCCESS')
+    else:
+        common.sprint('INITREMOTE-FAILURE You need to set OAUTH environment variables and folder and encryption parameters when running initremote.')
+    common.log("Done")
+
+def prepare(line):
+    common.log("")
+
+    myfolder = common.getConfig("folder")
+    encryption = common.getConfig("encryption")
+    stored_creds = common.getConfig("stored_creds")
+    stored_creds = json.loads(stored_creds)
+    if len(myfolder) > 1 and len(stored_creds):
+        conf["folder"] = myfolder
+        conf["encrypted"] = encryption.lower().find("none") == -1
+        common.sprint('DEBUG ' + plugin)
+        if login(stored_creds):
+            common.sprint('PREPARE-SUCCESS')
+        else:
+            common.sprint('PREPARE-FAILURE Login failure.')
+    else:
+        common.sprint('PREPARE-FAILURE You need to set USERNAME and PASSWORD environment variables and folder and encryption parameters for the remote.')
+    common.log("")
+
+def transfer(line):
+    common.log("")
+    folder = setFolder(conf["folder"], common.ask("DIRHASH " + line[2]))
+
+    if line[1] == "STORE":
+        if postFile(line[2], " ".join(line[3:]), folder):
+            common.sprint('TRANSFER-SUCCESS STORE ' + line[2] + '')
+        else:
+            common.sprint('TRANSFER-FAILURE STORE ' + line[2] + ' File could not be stored')
+    if line[1] == "RETRIEVE":
+        if getFile(line[2], " ".join(line[3:]), folder):
+            common.sprint('TRANSFER-SUCCESS RETRIEVE ' + line[2] + '')
+        else:
+            common.sprint('TRANSFER-FAILURE RETRIEVE ' + line[2] + ' File could not be retrieved')
+    common.log("Done")
+
+def checkpresent(line):
+    common.log("")
+    folder = setFolder(conf["folder"], common.ask("DIRHASH " + line[1]))
+    if not len(folder):
+        common.sprint('CHECKPRESENT-UNKNOWN ' + line[1] + ' this remote is not currently available')
+        return None
+
+    if checkFile(line[1], folder):
+        common.sprint('CHECKPRESENT-SUCCESS ' + line[1] + '')
+    else:
+        common.sprint('CHECKPRESENT-FAILURE ' + line[1] + '')
+    common.log("Done")
+
+def remove(line):
+    common.log("")
+    folder = setFolder(conf["folder"], common.ask("DIRHASH " + line[1]))
+                
+    if deleteFile(line[1], folder):
+        common.sprint('REMOVE-SUCCESS ' + line[1] + '')
+    else:
+        common.sprint('REMOVE-FAILURE ' + line[1] + ' This file could not be removed')
+    common.log("Done")
+
+def getCost():
+    common.log("", 3)
+    common.sprint("COST 150")
+
+t = time.time()
+if dbglevel > 0:
+    sys.stderr.write("\n")
+
+common.log("START")
+if __name__ == '__main__':
+    common.startRemote()
+common.log("STOP: %ss" % int(time.time() - t))
