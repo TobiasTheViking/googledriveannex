@@ -12,7 +12,8 @@ except:
     dbglevel = 0
 
 conf = {}
-version = "0.2.0"
+
+version = "0.2.1"
 plugin = "googledriveannex-" + version
 
 pwd = os.path.realpath(__file__)
@@ -41,6 +42,7 @@ oauth_scope = 'https://www.googleapis.com/auth/drive'
 http = httplib2.Http()
 service = False
 credentials = False
+cache = {}
 
 def login(cred={}):
     common.log("")
@@ -157,51 +159,76 @@ def postFile(subject, filename, folder):
         return False
 
 def findInFolder(subject, folder):
-    common.log("%s - %s" % (repr(subject), repr(folder)), 3)
+    common.log("subject: %s" % (repr(subject)), )
+    common.log("folder: %s" % (repr(folder)), 2)
+    global cache
 
-    result = []
+    if folder:
+        tpath = (folder["id"] + "/" + subject).replace("//", "/")
+    else:
+        tpath = ("/" + subject).replace("//", "/")
+
+    if tpath in cache:
+        common.log("Returning from cache")
+        return cache[tpath]
+
     page_token = None
     errors = 0
+    if folder:
+        ttpath = folder["id"]
+    else:
+	ttpath = ""
+
     while True:
         try:
-            param = {'q': "title = '%s'" % subject, "fields": "items"}
-            #param = {'q': "title = '%s'" % subject}
-            #param = {"fields": "items"}
+            param = {"fields": "items"}
             if folder:
-                param["q"] += " and '%s' in parents" % folder["id"]
+                param["q"] = "'%s' in parents" % folder["id"]
+	    else:
+		param["q"] = "title = '%s'" % subject
             if page_token:
                 param['pageToken'] = page_token
             common.log("Calling with: " + repr(param), 1)
             files = service.files().list(**param).execute()
 
-            result.extend(files['items'])
+            #result.extend(files['items'])
+
+	    for res in files['items']:
+            	if res["mimeType"] == "application/vnd.google-apps.folder":
+            	   common.log("unFound %s folder %s with id %s" %( subject, res["title"], repr(res["id"])), 3)
+	    	   cache[(ttpath + "/" + res["title"]).replace("//", "/")] = res
+            	   if res["title"] == subject:
+		      break
+
+        	if "originalFilename" in res:
+            	   common.log("unFound %s file %s with id %s" %( subject, res["originalFilename"], repr(res["id"])), 3)
+	    	   cache[(ttpath + "/" + res["originalFilename"]).replace("//", "/")] = res
+            	   if res["originalFilename"] == subject:
+		      break
+
             page_token = files.get('nextPageToken')
             if not page_token:
-                common.log("Breaking with: " + repr(result) + " - " + repr(files), 1)
+                common.log("No more pages, breaking", 1)
                 break
+	    common.log("page_token: " + repr(page_token), 1)
         except Exception as e:
             common.log('An error occurred(%s): %s' % (errors, repr(e)))
         #except errors.HttpError, error:
             #common.log('An error occurred(%s): %s' % (errors, error))
             errors += 1
-            if errors < 4:
+            if errors < 10:
                 time.sleep(errors)
-                return False
             else:
                 common.log("Fatal error: " + repr(error))
-                return True
-                sys.exit(1)
+                return False
 
-    common.log("Results: " + str(len(result)), 1)
-    for res in result:
-        if res["mimeType"] == "application/vnd.google-apps.folder" and res["title"] == subject:
-                common.log("Found folder %s with id %s" %( subject, repr(res["id"])))
-                return res
+    common.log("Updated cache: " + repr(cache), 3)
+    for tmp_file in cache.keys():
+        common.log("folder: " + tmp_file + " - " + tpath, 3)
+     	if tmp_file == tpath:
+            common.log("Done: " + repr(cache[tmp_file]["id"]))
+            return cache[tmp_file]
 
-        if "originalFilename" in res:
-            if res["originalFilename"] == subject:
-                common.log("Found file %s with id %s" %( subject, repr(res["id"])))
-                return res
     common.log("Failure on: " + repr(subject))
     return False
 
@@ -266,9 +293,10 @@ def setFolder(base, keys):
 
     folder = findInFolder(base, False)
     if folder:
-        common.log("Using folder: " + repr(folder))
+        common.log("Using folder: " + repr(folder["id"]))
         ANNEX_FOLDER = folder
     else:
+        common.log("Creating root folder: " + repr(folder))
         root_folder = service.files().insert(body={ 'title': base, 'mimeType': "application/vnd.google-apps.folder" }).execute()
         common.log("root folder: " + repr(root_folder["id"]))
         ANNEX_FOLDER = root_folder
@@ -318,6 +346,7 @@ def prepare(line):
     encryption = common.getConfig("encryption")
     stored_creds = common.getConfig("stored_creds")
     stored_creds = json.loads(stored_creds)
+
     if len(myfolder) > 1 and len(stored_creds):
         conf["folder"] = myfolder
         conf["encrypted"] = encryption.lower().find("none") == -1
