@@ -330,13 +330,16 @@ def initremote(line):
     oauth = os.getenv("OAUTH") or ""
     encryption = common.getConfig("encryption")
     myfolder = common.getConfig("folder")
-    stored_creds = sys.modules["__main__"].login({"oauth": oauth})
-    if len(myfolder) and stored_creds:
-        common.sprint('SETCONFIG myfolder ' + myfolder + '')
-        common.sprint('SETCONFIG stored_creds ' + json.dumps(stored_creds) + '')
-        common.sprint('INITREMOTE-SUCCESS')
+    if not common.getConfig("stored_creds"):
+	    stored_creds = sys.modules["__main__"].login({"oauth": oauth})
+	    if len(myfolder) and stored_creds:
+	        common.sprint('SETCONFIG myfolder ' + myfolder + '')
+	        common.sprint('SETCONFIG stored_creds ' + json.dumps(stored_creds) + '')
+	        common.sprint('INITREMOTE-SUCCESS')
+	    else:
+	        common.sprint('INITREMOTE-FAILURE You need to set OAUTH environment variables and folder and encryption parameters when running initremote.')
     else:
-        common.sprint('INITREMOTE-FAILURE You need to set OAUTH environment variables and folder and encryption parameters when running initremote.')
+	        common.sprint('INITREMOTE-SUCCESS')
     common.log("Done")
 
 def prepare(line):
