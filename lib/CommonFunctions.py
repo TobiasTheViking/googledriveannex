@@ -204,7 +204,7 @@ def fetchPage(params={}):
         if get("progress"):
             data = False
             tdata = ""
-            totalsize = int(con.headers['content-length'])
+            totalsize = 0
             chunksize = totalsize / 100
             if chunksize < 4096:
                 chunksize = 4096
