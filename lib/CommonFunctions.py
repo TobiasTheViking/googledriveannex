@@ -157,6 +157,8 @@ def encode_multipart_formdata(fields, boundary=None):
 def fetchPage(params={}):
     get = params.get
     link = get("link")
+    log("link")
+    log(link)
     ret_obj = { "new_url": link}
     if get("post_data") or get("post_files"):
         log("called for : " + repr(params['link']))
@@ -204,7 +206,7 @@ def fetchPage(params={}):
         if get("progress"):
             data = False
             tdata = ""
-            totalsize = int(con.headers['content-length'])
+            totalsize = int(get("totalSize"))
             chunksize = totalsize / 100
             if chunksize < 4096:
                 chunksize = 4096
