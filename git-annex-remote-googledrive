@@ -254,7 +254,7 @@ def getFile(subject, filename, folder):
         download_url = file.get('downloadUrl')
         common.log("Got download_url: " + repr(download_url))
         if download_url:
-            ret = common.fetchPage({"link": download_url, "headers": [("Authorization", "Bearer " + credentials.access_token)], "progress": "true"})
+            ret = common.fetchPage({"link": download_url, "headers": [("Authorization", "Bearer " + credentials.access_token)], "progress": "true", "totalSize": file["fileSize"]})
 
             if ret["status"] == 200:
                 common.log('Status: %s' % ret["status"])
