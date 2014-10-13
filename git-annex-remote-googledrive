@@ -177,15 +177,15 @@ def findInFolder(subject, folder):
     if folder:
         ttpath = folder["id"]
     else:
-	ttpath = ""
+        ttpath = ""
 
     while True:
         try:
             param = {"fields": "items"}
             if folder:
                 param["q"] = "'%s' in parents" % folder["id"]
-	    else:
-		param["q"] = "title = '%s'" % subject
+            else:
+                param["q"] = "title = '%s'" % subject
             if page_token:
                 param['pageToken'] = page_token
             common.log("Calling with: " + repr(param), 1)
@@ -193,24 +193,24 @@ def findInFolder(subject, folder):
 
             #result.extend(files['items'])
 
-	    for res in files['items']:
-            	if res["mimeType"] == "application/vnd.google-apps.folder":
-            	   common.log("unFound %s folder %s with id %s" %( subject, res["title"], repr(res["id"])), 3)
-	    	   cache[(ttpath + "/" + res["title"]).replace("//", "/")] = res
-            	   if res["title"] == subject:
-		      break
+            for res in files['items']:
+                if res["mimeType"] == "application/vnd.google-apps.folder":
+                   common.log("unFound %s folder %s with id %s" %( subject, res["title"], repr(res["id"])), 3)
+                   cache[(ttpath + "/" + res["title"]).replace("//", "/")] = res
+                   if res["title"] == subject:
+                      break
 
-        	if "originalFilename" in res:
-            	   common.log("unFound %s file %s with id %s" %( subject, res["originalFilename"], repr(res["id"])), 3)
-	    	   cache[(ttpath + "/" + res["originalFilename"]).replace("//", "/")] = res
-            	   if res["originalFilename"] == subject:
-		      break
+                if "originalFilename" in res:
+                   common.log("unFound %s file %s with id %s" %( subject, res["originalFilename"], repr(res["id"])), 3)
+                   cache[(ttpath + "/" + res["originalFilename"]).replace("//", "/")] = res
+                   if res["originalFilename"] == subject:
+                      break
 
             page_token = files.get('nextPageToken')
             if not page_token:
                 common.log("No more pages, breaking", 1)
                 break
-	    common.log("page_token: " + repr(page_token), 1)
+            common.log("page_token: " + repr(page_token), 1)
         except Exception as e:
             common.log('An error occurred(%s): %s' % (errors, repr(e)))
         #except errors.HttpError, error:
@@ -225,7 +225,7 @@ def findInFolder(subject, folder):
     common.log("Updated cache: " + repr(cache), 3)
     for tmp_file in cache.keys():
         common.log("folder: " + tmp_file + " - " + tpath, 3)
-     	if tmp_file == tpath:
+        if tmp_file == tpath:
             common.log("Done: " + repr(cache[tmp_file]["id"]))
             return cache[tmp_file]
 
